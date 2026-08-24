@@ -14,9 +14,11 @@ import { bolaRef } from "@/lib/refs";
 const UMBRAL_DETENIDA = 0.05; // u/s — por debajo se considera "parada" para el HUD
 const Y_CAIDA_LIMITE = -5; // TODO(Fase 3): sustituir por la regla real (agua/fuera de límites ⇒ +1 y vuelve a la última posición seca)
 
-// Animación de embocado: la bola no se limita a pararse encima de la copa
-// (con el radio de copa más grande que la bola no se notaba que "caía"
-// dentro) — se anima cayendo y encogiendo un poco, puramente visual.
+// Animación de embocado: la bola no se limita a pararse encima de la copa,
+// se anima cayendo hasta el fondo del agujero de verdad (geometria.ts
+// `celdaConAgujero`). Nada de encoger la bola — con el agujero ya teniendo
+// profundidad real, encogerla ENCIMA quedaba raro (se veía "hacerse
+// pequeña" en vez de caer).
 const DURACION_EMBOCADO_S = 0.4;
 const PROFUNDIDAD_EMBOCADO = 0.3;
 
@@ -64,7 +66,6 @@ export function Bola({
   const ultimoIdProcesado = useRef(0);
   const estabaEnMovimiento = useRef(false);
   const velocidadYAnterior = useRef(0);
-  const mallaRef = useRef<THREE.Mesh>(null);
   const embocadoAnim = useRef<{ yInicial: number; t: number } | null>(null);
   const solicitudDisparo = useJuego((s) => s.solicitudDisparo);
   const embocada = useJuego((s) => s.embocada);
@@ -97,15 +98,13 @@ export function Bola({
       const p = api.translation();
       api.setTranslation({ x: p.x, y: embocadoAnim.current.yInicial - PROFUNDIDAD_EMBOCADO * progreso, z: p.z }, true);
       api.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      mallaRef.current?.scale.setScalar(1 - 0.6 * progreso);
       return;
     }
 
     if (embocadoAnim.current) {
       // Se ha reiniciado la partida viniendo de un embocado: deshace lo que
-      // dejó la animación (gravedad, escala) antes de seguir jugando.
+      // dejó la animación (gravedad) antes de seguir jugando.
       api.setGravityScale(1, true);
-      mallaRef.current?.scale.setScalar(1);
       embocadoAnim.current = null;
     }
 
@@ -198,7 +197,7 @@ export function Bola({
       angularDamping={0.4}
     >
       <BallCollider args={[RADIO_BOLA]} />
-      <mesh ref={mallaRef} castShadow>
+      <mesh castShadow>
         <sphereGeometry args={[RADIO_BOLA, 32, 32]} />
         <meshStandardMaterial
           color="#f5f5f0"
