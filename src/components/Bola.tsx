@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { RADIO_BOLA } from "@/lib/tipos";
 import type { Celda, DireccionCorriente, Pelota } from "@/lib/tipos";
 import { restitucionPelota, aceleracionCorriente, amortiguacionRodadura, embocaria } from "@/lib/fisica";
+import { obtenerTexturaHoyuelosPelota } from "@/lib/texturas";
 import { useJuego } from "@/lib/store";
 import { bolaRef } from "@/lib/refs";
 
@@ -23,15 +24,17 @@ function suavizado(t: number): number {
   return t * t * (3 - 2 * t); // smoothstep
 }
 
-// TODO: ajustar en playtest — suaviza el cambio de ángulo al entrar/salir de
-// una rampa. Un collider hecho de caras planas (trimesh) tiene un cambio
-// BRUSCO de normal justo en la costura con la celda plana vecina; el
-// solver de físicas puede resolver eso con un empujón vertical que se ve
-// como "la rampa lanza la bola". Como la bola llega rodando (velocidad
-// vertical ya pequeña) y no cayendo (velocidad vertical muy negativa), se
-// puede distinguir un bache de una caída real y limar solo el bache.
-const LIMITE_VERTICAL_RODANDO = 1.5; // |vy| por debajo de esto se considera "rodando", no "cayendo"
-const LIMITE_SALTO_SUAVE = 2; // tope de vy al detectar un bache mientras se rueda
+// TODO: ajustar en playtest — mantiene la bola "pegada al suelo" mientras
+// rueda: sin esto, cualquier micro-bache del collider (una costura entre
+// materiales, ruido numérico del solver, o el cambio de normal al entrar o
+// salir de una rampa) se traducía en rebotitos perceptibles incluso en
+// terreno llano (feedback real de playtest). Solo se distingue de una
+// CAÍDA real por la velocidad vertical que traía el frame anterior: si ya
+// venía cayendo fuerte, se deja rebotar con normalidad; si no, cualquier
+// vy hacia arriba por encima del tope se recorta.
+const CAYENDO_DE_VERDAD_VY = -3; // vy (frame anterior) más negativa que esto ⇒ fue una caída real
+const TOPE_VY_RODANDO = 0.3; // por encima de esto sin venir de una caída real, se recorta
+const TOLERANCIA_ALTURA = 0.08; // u — cuánto puede separarse del suelo antes de devolverla a la altura de reposo
 
 const DIRECCION_CORRIENTE: Record<DireccionCorriente, THREE.Vector3> = {
   N: new THREE.Vector3(0, 0, -1),
@@ -127,16 +130,29 @@ export function Bola({
     // mientras esté cerca del suelo: en pleno vuelo de un golpe no debe
     // frenarse como si rodara.
     const alturaSuelo = celda?.altura ?? 0;
-    const cercaDelSuelo = posicion.y < alturaSuelo + RADIO_BOLA + 0.5;
+    const alturaReposo = alturaSuelo + RADIO_BOLA;
+    const cercaDelSuelo = posicion.y < alturaReposo + 0.5;
     api.setLinearDamping(cercaDelSuelo ? amortiguacionRodadura(pelota, celda?.material ?? "cesped") : 0);
 
-    // Costuras de la rampa: si la bola llegaba RODANDO (vy pequeña) y de
-    // repente vy sube mucho, es un bache del collider, no una caída real
-    // (una caída de verdad llega con vy ya muy negativa) — se recorta.
-    const rodabaSuave = cercaDelSuelo && Math.abs(velocidadYAnterior.current) < LIMITE_VERTICAL_RODANDO;
-    if (rodabaSuave && velocidad.y > LIMITE_SALTO_SUAVE) {
-      api.setLinvel({ x: velocidad.x, y: LIMITE_SALTO_SUAVE, z: velocidad.z }, true);
-      velocidadYAnterior.current = LIMITE_SALTO_SUAVE;
+    // Pegada al suelo salvo caída real (ver comentario arriba de las
+    // constantes). El recorte de velocidad no basta cuando el propio golpe
+    // (inyectar de golpe una velocidad horizontal grande sobre una bola en
+    // reposo) hace que el solver de contacto "empuje" la bola hacia arriba
+    // en un único paso de física — para cuando este código lo ve puede
+    // llevar ya más de 0.5u en el aire (fuera de `cercaDelSuelo`), así que
+    // la corrección de posición NO se limita a "cerca del suelo": mientras
+    // haya una celda de verdad debajo (si no, está cayendo por un hueco de
+    // verdad, eso sí hay que dejarlo) y no venga de una caída real, no hay
+    // ninguna razón legítima para que se haya separado del suelo.
+    const veniaCayendoFuerte = velocidadYAnterior.current < CAYENDO_DE_VERDAD_VY;
+    const sinRazonParaSubir = celda !== undefined && !veniaCayendoFuerte;
+    if (sinRazonParaSubir && posicion.y > alturaReposo + TOLERANCIA_ALTURA) {
+      api.setTranslation({ x: posicion.x, y: alturaReposo, z: posicion.z }, true);
+      api.setLinvel({ x: velocidad.x, y: 0, z: velocidad.z }, true);
+      velocidadYAnterior.current = 0;
+    } else if (cercaDelSuelo && sinRazonParaSubir && velocidad.y > TOPE_VY_RODANDO) {
+      api.setLinvel({ x: velocidad.x, y: TOPE_VY_RODANDO, z: velocidad.z }, true);
+      velocidadYAnterior.current = TOPE_VY_RODANDO;
     } else {
       velocidadYAnterior.current = velocidad.y;
     }
@@ -183,8 +199,13 @@ export function Bola({
     >
       <BallCollider args={[RADIO_BOLA]} />
       <mesh ref={mallaRef} castShadow>
-        <sphereGeometry args={[RADIO_BOLA, 24, 24]} />
-        <meshStandardMaterial color="#f5f5f0" roughness={0.4} />
+        <sphereGeometry args={[RADIO_BOLA, 32, 32]} />
+        <meshStandardMaterial
+          color="#f5f5f0"
+          roughness={0.4}
+          bumpMap={obtenerTexturaHoyuelosPelota()}
+          bumpScale={0.01}
+        />
       </mesh>
     </RigidBody>
   );

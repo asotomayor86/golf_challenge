@@ -87,6 +87,39 @@ describe("construirGeometriaHoyo", () => {
     expect(volumen).toBeGreaterThan(0.5);
     expect(volumen).toBeLessThan(1);
   });
+
+  it("con 'copa', la celda de la bandera queda hueca por dentro (agujero de verdad, no un decorado encima)", () => {
+    const radio = 0.35;
+    const profundidad = 0.4;
+    const segmentos = 20;
+    const celda = celdaDePrueba("cubo", 1, 4, 4);
+    const [grupo] = construirGeometriaHoyo([celda], { x: 4, z: 4, radio, profundidad, segmentos });
+    const volumen = volumenSolido(grupo!.geometria.getAttribute("position").array);
+
+    // El borde exterior del aro pasa EXACTO por las 4 esquinas del cuadrado
+    // (ver angulosAro en geometria.ts) — por eso el área exterior es 1 en
+    // vez de un polígono aproximado. El área interior sí usa los mismos
+    // ángulos irregulares (pasos regulares + esquinas) que la implementación,
+    // vía la fórmula de un polígono "en abanico" desde el centro:
+    // área = (r²/2)·Σ sin(Δángulo).
+    const esquinas = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
+    const pasos = Array.from({ length: segmentos }, (_, i) => (i / segmentos) * Math.PI * 2);
+    const angulos = Array.from(new Set([...esquinas, ...pasos])).sort((a, b) => a - b);
+    let areaInterior = 0;
+    for (let i = 0; i < angulos.length; i++) {
+      const a0 = angulos[i]!;
+      const a1 = i + 1 < angulos.length ? angulos[i + 1]! : angulos[0]! + Math.PI * 2;
+      areaInterior += 0.5 * radio * radio * Math.sin(a1 - a0);
+    }
+    const esperado = 1 * 1 * 1 - areaInterior * profundidad;
+    expect(volumen).toBeCloseTo(esperado, 6);
+  });
+
+  it("sin 'copa' (o en otra celda), no perfora ningún agujero", () => {
+    const celda = celdaDePrueba("cubo", 1, 4, 4);
+    const [grupo] = construirGeometriaHoyo([celda], { x: 9, z: 9, radio: 0.35, profundidad: 0.4 });
+    expect(volumenSolido(grupo!.geometria.getAttribute("position").array)).toBeCloseTo(1, 6);
+  });
 });
 
 describe("trimeshDesdeGeometria", () => {

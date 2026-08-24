@@ -102,6 +102,8 @@ export function aceleracionCorriente(fuerza: 1 | 2 | 3 | 4 | 5): number {
 /** TODO: ajustar en playtest — radio (u) de la copa y velocidad máxima para embocar sin lip-out. */
 export const RADIO_COPA = 0.35;
 export const VELOCIDAD_MAX_EMBOCAR = 4.5;
+/** Profundidad (u) del agujero recortado en el terreno bajo la copa — ver geometria.ts `celdaConAgujero`. */
+export const PROFUNDIDAD_COPA = 0.4;
 
 /** true = la bola entra; false = demasiado rápida, rebota (lip-out). */
 export function embocaria(distanciaAlCentro: number, velocidad: number): boolean {

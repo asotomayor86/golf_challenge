@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { RigidBody, TrimeshCollider } from "@react-three/rapier";
-import { construirGeometriaHoyo, trimeshDesdeGeometria } from "@/lib/geometria";
+import { construirGeometriaHoyo, trimeshDesdeGeometria, type DescripcionCopa } from "@/lib/geometria";
 import { ESTILO_MATERIAL } from "@/lib/materiales";
 import { friccionEnMaterial } from "@/lib/fisica";
 import { obtenerTexturaCesped } from "@/lib/texturas";
@@ -20,8 +20,16 @@ function texturaDe(material: Material): ReturnType<typeof obtenerTexturaCesped> 
   return material === "cesped" ? obtenerTexturaCesped() : undefined;
 }
 
-export function Terreno({ celdas, pelota }: { celdas: Celda[]; pelota: Pelota }) {
-  const grupos = useMemo(() => construirGeometriaHoyo(celdas), [celdas]);
+export function Terreno({
+  celdas,
+  pelota,
+  copa,
+}: {
+  celdas: Celda[];
+  pelota: Pelota;
+  copa?: DescripcionCopa;
+}) {
+  const grupos = useMemo(() => construirGeometriaHoyo(celdas, copa), [celdas, copa]);
 
   return (
     <>

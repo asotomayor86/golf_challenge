@@ -196,6 +196,72 @@ function bloqueSuperior(
   }
 }
 
+/** Punto donde un rayo desde el centro (0.5, 0.5) en dirección `angulo` cruza el borde del cuadrado unidad. */
+function puntoEnBordeCuadradoUnidad(angulo: number): [number, number] {
+  const dx = Math.cos(angulo);
+  const dz = Math.sin(angulo);
+  const candidatos: number[] = [];
+  if (dx > 1e-9) candidatos.push(0.5 / dx);
+  if (dx < -1e-9) candidatos.push(-0.5 / dx);
+  if (dz > 1e-9) candidatos.push(0.5 / dz);
+  if (dz < -1e-9) candidatos.push(-0.5 / dz);
+  const t = Math.min(...candidatos);
+  return [0.5 + dx * t, 0.5 + dz * t];
+}
+
+/**
+ * Ángulos a usar para el aro: `segmentos` pasos regulares MÁS los 4 ángulos
+ * exactos de las esquinas del cuadrado. Sin las esquinas, casi ningún paso
+ * regular cae justo en una — el tramo entre los dos pasos vecinos "corta" la
+ * esquina en vez de llegar a ella, dejando una fuga real en la malla (no
+ * solo un redondeo visual): el aro no llegaría a soldar con las paredes de
+ * `caja` en esas esquinas exactas.
+ */
+function angulosAro(segmentos: number): number[] {
+  const angulos = new Set<number>([Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4]);
+  for (let i = 0; i < segmentos; i++) angulos.add((i / segmentos) * Math.PI * 2);
+  return Array.from(angulos).sort((a, b) => a - b);
+}
+
+/**
+ * Celda 'cubo' con un agujero cilíndrico perforado en la cara superior (la
+ * copa): un aro entre el borde del cuadrado y el círculo del agujero, más
+ * las paredes y el fondo de ese agujero — no un círculo pintado ENCIMA de
+ * un bloque sólido (eso quedaba enterrado dentro del bloque y no se veía).
+ *
+ * El giro de `orientarHaciaAfuera` (que usa la media de los vértices como
+ * "centro") no vale aquí: con el agujero ocupando buena parte de la altura
+ * del bloque, esa media puede caer más cerca del fondo del agujero que del
+ * grueso del sólido y confundir paredes/aro. Por eso esta función deriva el
+ * sentido de cada cara a mano (verificado con el producto vectorial) en vez
+ * de apoyarse en esa red de seguridad.
+ */
+function celdaConAgujero(altura: number, radio: number, profundidad: number, segmentos: number): Triangulo[] {
+  const tris: Triangulo[] = [...caja(0, 1, 0, altura, 0, 1, { arriba: false })];
+
+  const yBorde = altura;
+  const yFondo = altura - profundidad;
+  const centro = v(0.5, yFondo, 0.5);
+
+  const angulos = angulosAro(segmentos);
+  for (let i = 0; i < angulos.length; i++) {
+    const a0 = angulos[i]!;
+    const a1 = i + 1 < angulos.length ? angulos[i + 1]! : angulos[0]! + Math.PI * 2;
+    const [ox0, oz0] = puntoEnBordeCuadradoUnidad(a0);
+    const [ox1, oz1] = puntoEnBordeCuadradoUnidad(a1);
+    const i0 = v(0.5 + Math.cos(a0) * radio, yBorde, 0.5 + Math.sin(a0) * radio);
+    const i1 = v(0.5 + Math.cos(a1) * radio, yBorde, 0.5 + Math.sin(a1) * radio);
+    const f0 = v(i0.x, yFondo, i0.z);
+    const f1 = v(i1.x, yFondo, i1.z);
+
+    tris.push(...quad(v(ox0, yBorde, oz0), i0, i1, v(ox1, yBorde, oz1))); // aro (+Y)
+    tris.push(...quad(i1, i0, f0, f1)); // pared del agujero, hacia el eje
+    tris.push([centro, f1, f0]); // fondo (+Y)
+  }
+
+  return tris;
+}
+
 /** Todos los triángulos (en espacio local) de una celda, con la normal ya verificada hacia afuera. */
 function triangulosCelda(celda: Celda): Triangulo[] {
   if (celda.altura <= 0) return [];
@@ -254,16 +320,33 @@ export interface GeometriaMaterial {
   geometria: THREE.BufferGeometry;
 }
 
+export interface DescripcionCopa {
+  x: number;
+  z: number;
+  radio: number;
+  profundidad: number;
+  segmentos?: number;
+}
+
 /**
  * Construye, para un hoyo completo, una geometría fusionada por material.
  * Es la única función que el render debe llamar para pintar el terreno: da
  * como mucho un `<mesh>` por material (§9), nunca uno por bloque.
+ *
+ * `copa`, si se da, perfora un agujero de verdad en la celda de la bandera
+ * (en vez de un decorado plano encima, que quedaba enterrado dentro del
+ * bloque sólido y no se veía — ver `celdaConAgujero`). Solo aplica sobre
+ * celdas de forma 'cubo'; con otra forma se deja tal cual (TODO Fase 2:
+ * decidir qué hacer si el editor permite poner la bandera sobre una rampa).
  */
-export function construirGeometriaHoyo(celdas: Celda[]): GeometriaMaterial[] {
+export function construirGeometriaHoyo(celdas: Celda[], copa?: DescripcionCopa): GeometriaMaterial[] {
   const porMaterial = new Map<Material, THREE.BufferGeometry[]>();
 
   for (const celda of celdas) {
-    const tris = triangulosCelda(celda);
+    const esCopa = copa && celda.x === copa.x && celda.z === copa.z && celda.forma === "cubo" && celda.altura > 0;
+    const tris = esCopa
+      ? celdaConAgujero(celda.altura, copa.radio, copa.profundidad, copa.segmentos ?? 20)
+      : triangulosCelda(celda);
     if (tris.length === 0) continue;
     const geometria = geometriaDesdeTriangulos(tris);
     geometria.translate(celda.x, 0, celda.z);

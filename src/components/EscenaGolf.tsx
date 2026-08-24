@@ -5,6 +5,8 @@ import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import type { Hoyo, Palo, Pelota } from "@/lib/tipos";
 import { posicionSobreCelda } from "@/lib/hoyoUtils";
+import { RADIO_COPA, PROFUNDIDAD_COPA } from "@/lib/fisica";
+import type { DescripcionCopa } from "@/lib/geometria";
 import { Terreno } from "./Terreno";
 import { Bola } from "./Bola";
 import { Bandera } from "./Bandera";
@@ -27,6 +29,15 @@ export function EscenaGolf({ hoyo, palo, pelota }: { hoyo: Hoyo; palo: Palo; pel
   );
   const posicionBandera = useMemo(
     () => posicionSobreCelda(hoyo.celdas, hoyo.bandera.x, hoyo.bandera.z, 0),
+    [hoyo],
+  );
+  // En 'normal' hay copa (agujero de verdad recortado en el terreno); en
+  // 'desempate' solo bandera, sin agujero (§2).
+  const copa: DescripcionCopa | undefined = useMemo(
+    () =>
+      hoyo.tipo === "normal"
+        ? { x: hoyo.bandera.x, z: hoyo.bandera.z, radio: RADIO_COPA, profundidad: PROFUNDIDAD_COPA }
+        : undefined,
     [hoyo],
   );
 
@@ -62,7 +73,7 @@ export function EscenaGolf({ hoyo, palo, pelota }: { hoyo: Hoyo; palo: Palo; pel
         -13 es el punto intermedio actual, a falta de más partidas.
       */}
       <Physics timeStep={1 / 60} gravity={[0, -13, 0]}>
-        <Terreno celdas={hoyo.celdas} pelota={pelota} />
+        <Terreno celdas={hoyo.celdas} pelota={pelota} copa={copa} />
         <Bola
           celdas={hoyo.celdas}
           pelota={pelota}
