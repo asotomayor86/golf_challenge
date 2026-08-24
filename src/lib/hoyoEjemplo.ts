@@ -1,9 +1,15 @@
 /**
  * Hoyo hardcodeado para la Fase 1: aquí es donde se valida que la física "se
  * siente bien" antes de construir el editor (§1 del prompt). Recorre calle de
- * césped → búnker de arena → rampa → placa de hielo → corriente → green, y
- * añade un rincón con las 5 formas para comprobar que el generador procedural
+ * césped → búnker de arena → placa de hielo → corriente → green, y añade un
+ * rincón con las 5 formas para comprobar que el generador procedural
  * (`geometria.ts`) las construye todas sin fallar.
+ *
+ * TODO: la calle principal está TEMPORALMENTE sin rampa (toda a altura 1) —
+ * el collider trimesh de la rampa seguía dando algún bache al cruzarla y se
+ * ha quitado de la calle para poder probar el resto (textura, fricciones,
+ * corriente) sin ese ruido de por medio. La rampa sigue existiendo como
+ * forma (usada en el rincón de muestra vía rampa_esquina) y en los tests.
  */
 import type { Celda, Hoyo } from "./tipos";
 
@@ -24,23 +30,22 @@ function rectangulo(
 }
 
 const CESPED_1 = { altura: 1, material: "cesped", forma: "cubo", rotacion: 0 } as const;
-const CESPED_2 = { altura: 2, material: "cesped", forma: "cubo", rotacion: 0 } as const;
 
 const celdas: Celda[] = [
-  // Calle principal (z=1..3), de la salida al green.
+  // Calle principal (z=1..3), de la salida al green — toda a altura 1, sin
+  // rampa (ver TODO arriba).
   ...rectangulo(0, 2, 1, 3, CESPED_1), // salida
   ...rectangulo(3, 4, 1, 3, { altura: 1, material: "arena", forma: "cubo", rotacion: 0 }), // búnker
-  ...rectangulo(5, 5, 1, 3, { altura: 2, material: "cesped", forma: "rampa", rotacion: 90 }), // sube hacia +x
-  ...rectangulo(6, 7, 1, 3, CESPED_2), // meseta
-  ...rectangulo(8, 8, 1, 3, { altura: 2, material: "hielo", forma: "cubo", rotacion: 0 }), // placa de hielo
+  ...rectangulo(5, 7, 1, 3, CESPED_1),
+  ...rectangulo(8, 8, 1, 3, { altura: 1, material: "hielo", forma: "cubo", rotacion: 0 }), // placa de hielo
   ...rectangulo(9, 9, 1, 3, {
-    altura: 2,
+    altura: 1,
     material: "corriente",
     forma: "cubo",
     rotacion: 0,
     corriente: { direccion: "E", fuerza: 3 },
   }),
-  ...rectangulo(10, 11, 1, 3, CESPED_2), // green con la copa
+  ...rectangulo(10, 11, 1, 3, CESPED_1), // green con la copa
 
   // Rincón de muestra (fuera de la calle) con el resto de formas, para
   // comprobar que el generador procedural las soporta todas.
