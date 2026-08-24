@@ -25,9 +25,13 @@ export function velocidadMaxima(palo: Palo): number {
  * puramente visual (línea + rebotes previsualizados, ver `guiaVisual`).
  */
 
+// TODO: ajustar en playtest — antes era guia*3 (hasta 15 u con guía 5), se
+// veía desproporcionada en un hoyo pequeño; se acorta a guia*1.
+export const ESCALA_LONGITUD_GUIA = 1;
+
 /** Línea de guía: longitud (unidades) y nº de rebotes que previsualiza. */
 export function guiaVisual(palo: Palo): { longitud: number; rebotes: number } {
-  return { longitud: palo.guia * 3, rebotes: palo.guia - 1 };
+  return { longitud: palo.guia * ESCALA_LONGITUD_GUIA, rebotes: palo.guia - 1 };
 }
 
 // --- Pelota + material ---------------------------------------------------------

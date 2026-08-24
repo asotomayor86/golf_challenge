@@ -16,7 +16,7 @@ const POTENCIA_MINIMA_PARA_GOLPEAR = 0.03;
 // suave, morado = a tope). Un palo con potencia baja no puede llegar a los
 // colores altos aunque se arrastre a fondo — ver `nivelPotencia`.
 const COLORES_POTENCIA = ["#4caf50", "#ffd54f", "#ff9800", "#e53935", "#9c27b0"];
-const LONGITUD_MAX_FLECHA_POTENCIA = 2.5; // u, a potencia 100% — igual para todos los palos
+const LONGITUD_MAX_FLECHA_POTENCIA = 1; // u, a potencia 100% — igual para todos los palos (antes 2.5, acortada)
 
 /** Nivel de color (1..potenciaPalo) que corresponde al tirón actual, tope en la potencia propia del palo. */
 function nivelPotencia(potenciaUsada: number, potenciaPalo: number): number {

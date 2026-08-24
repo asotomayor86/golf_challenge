@@ -21,9 +21,9 @@ describe("palo", () => {
     expect(velocidadMaxima({ potencia: 5, guia: 1 })).toBe(28);
   });
 
-  it("guía: longitud = guia*3, rebotes = guia-1", () => {
-    expect(guiaVisual({ potencia: 2, guia: 4 })).toEqual({ longitud: 12, rebotes: 3 });
-    expect(guiaVisual({ potencia: 5, guia: 1 })).toEqual({ longitud: 3, rebotes: 0 });
+  it("guía: longitud = guia*ESCALA_LONGITUD_GUIA, rebotes = guia-1", () => {
+    expect(guiaVisual({ potencia: 2, guia: 4 })).toEqual({ longitud: 4, rebotes: 3 });
+    expect(guiaVisual({ potencia: 5, guia: 1 })).toEqual({ longitud: 1, rebotes: 0 });
   });
 });
 
