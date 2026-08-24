@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --fondo: #0d1210;
+  --acento: #46c98b;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--fondo);
+  color: #f4f1f2;
+  overscroll-behavior: none;
+  /* El juego se controla arrastrando: evita que el navegador interprete el
+     gesto como scroll/zoom, sobre todo en móvil. */
+  touch-action: none;
+}
+
+* {
+  box-sizing: border-box;
+}
