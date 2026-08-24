@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, BallCollider } from "@react-three/rapier";
+import type { Collider } from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { RADIO_BOLA } from "@/lib/tipos";
 import type { Celda, DireccionCorriente, Pelota } from "@/lib/tipos";
@@ -26,17 +27,16 @@ function suavizado(t: number): number {
   return t * t * (3 - 2 * t); // smoothstep
 }
 
-// TODO: ajustar en playtest — mantiene la bola "pegada al suelo" mientras
-// rueda: sin esto, cualquier micro-bache del collider (una costura entre
-// materiales, ruido numérico del solver, o el cambio de normal al entrar o
-// salir de una rampa) se traducía en rebotitos perceptibles incluso en
-// terreno llano (feedback real de playtest). Solo se distingue de una
-// CAÍDA real por la velocidad vertical que traía el frame anterior: si ya
-// venía cayendo fuerte, se deja rebotar con normalidad; si no, cualquier
-// vy hacia arriba por encima del tope se recorta.
-const CAYENDO_DE_VERDAD_VY = -3; // vy (frame anterior) más negativa que esto ⇒ fue una caída real
-const TOPE_VY_RODANDO = 0.3; // por encima de esto sin venir de una caída real, se recorta
-const TOLERANCIA_ALTURA = 0.08; // u — cuánto puede separarse del suelo antes de devolverla a la altura de reposo
+// TODO: ajustar en playtest — quita el rebote mientras la bola está cerca
+// del suelo (rodando), en vez de corregirlo después. Intentos anteriores
+// (recortar la velocidad vertical, incluso teletransportar la posición de
+// vuelta a la altura de reposo) sí evitaban el rebote pero se notaban "a
+// trompicones" — cualquier corrección aplicada de golpe, frame a frame, ES
+// en sí misma un movimiento discontinuo. Poner la restitución del collider
+// a 0 mientras rueda ataja la causa (nada rebota si la colisión es
+// perfectamente inelástica) en vez de corregir el síntoma después, así que
+// el movimiento que sale del propio solver ya es continuo. Con una caída
+// real (al aire, lejos del suelo) se restaura la restitución de la pelota.
 
 const DIRECCION_CORRIENTE: Record<DireccionCorriente, THREE.Vector3> = {
   N: new THREE.Vector3(0, 0, -1),
@@ -65,7 +65,7 @@ export function Bola({
 }) {
   const ultimoIdProcesado = useRef(0);
   const estabaEnMovimiento = useRef(false);
-  const velocidadYAnterior = useRef(0);
+  const colisionadorRef = useRef<Collider>(null);
   const embocadoAnim = useRef<{ yInicial: number; t: number } | null>(null);
   const solicitudDisparo = useJuego((s) => s.solicitudDisparo);
   const embocada = useJuego((s) => s.embocada);
@@ -133,28 +133,12 @@ export function Bola({
     const cercaDelSuelo = posicion.y < alturaReposo + 0.5;
     api.setLinearDamping(cercaDelSuelo ? amortiguacionRodadura(pelota, celda?.material ?? "cesped") : 0);
 
-    // Pegada al suelo salvo caída real (ver comentario arriba de las
-    // constantes). El recorte de velocidad no basta cuando el propio golpe
-    // (inyectar de golpe una velocidad horizontal grande sobre una bola en
-    // reposo) hace que el solver de contacto "empuje" la bola hacia arriba
-    // en un único paso de física — para cuando este código lo ve puede
-    // llevar ya más de 0.5u en el aire (fuera de `cercaDelSuelo`), así que
-    // la corrección de posición NO se limita a "cerca del suelo": mientras
-    // haya una celda de verdad debajo (si no, está cayendo por un hueco de
-    // verdad, eso sí hay que dejarlo) y no venga de una caída real, no hay
-    // ninguna razón legítima para que se haya separado del suelo.
-    const veniaCayendoFuerte = velocidadYAnterior.current < CAYENDO_DE_VERDAD_VY;
-    const sinRazonParaSubir = celda !== undefined && !veniaCayendoFuerte;
-    if (sinRazonParaSubir && posicion.y > alturaReposo + TOLERANCIA_ALTURA) {
-      api.setTranslation({ x: posicion.x, y: alturaReposo, z: posicion.z }, true);
-      api.setLinvel({ x: velocidad.x, y: 0, z: velocidad.z }, true);
-      velocidadYAnterior.current = 0;
-    } else if (cercaDelSuelo && sinRazonParaSubir && velocidad.y > TOPE_VY_RODANDO) {
-      api.setLinvel({ x: velocidad.x, y: TOPE_VY_RODANDO, z: velocidad.z }, true);
-      velocidadYAnterior.current = TOPE_VY_RODANDO;
-    } else {
-      velocidadYAnterior.current = velocidad.y;
-    }
+    // Sin rebote mientras rueda (ver comentario arriba de las constantes):
+    // restitución 0 = colisión perfectamente inelástica, así que ningún
+    // contacto (una costura, ruido del solver, el golpe en sí) tiene de
+    // dónde sacar un rebote. Al alejarse del suelo de verdad, se restaura
+    // la restitución real de la pelota para que un golpe fuerte sí bote.
+    colisionadorRef.current?.setRestitution(cercaDelSuelo ? 0 : restitucionPelota(pelota) * 2);
 
     // Corriente: aceleración continua mientras la bola esté sobre esas celdas.
     if (celda?.corriente) {
@@ -193,10 +177,11 @@ export function Bola({
       colliders={false}
       position={posicionInicial}
       friction={0} // la fricción real la pone el terreno (ver Terreno.tsx)
-      restitution={restitucionPelota(pelota) * 2} // combine-rule por defecto = media; terreno pone 0
       angularDamping={0.4}
     >
-      <BallCollider args={[RADIO_BOLA]} />
+      {/* restitution empieza en 0 (en reposo); useFrame la ajusta cada
+          frame según si está cerca del suelo o no (ver comentario arriba). */}
+      <BallCollider ref={colisionadorRef} args={[RADIO_BOLA]} restitution={0} />
       <mesh castShadow>
         <sphereGeometry args={[RADIO_BOLA, 32, 32]} />
         <meshStandardMaterial
