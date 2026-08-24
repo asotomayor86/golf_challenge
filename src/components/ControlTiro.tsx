@@ -5,7 +5,7 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useJuego } from "@/lib/store";
 import { bolaRef } from "@/lib/refs";
-import { velocidadMaxima, desvioGolpe, guiaVisual } from "@/lib/fisica";
+import { velocidadMaxima, guiaVisual } from "@/lib/fisica";
 import type { Palo } from "@/lib/tipos";
 
 const RADIO_INICIO_ARRASTRE_PX = 70; // el arrastre debe empezar cerca de la bola en pantalla
@@ -13,7 +13,7 @@ const ARRASTRE_MAX_PX = 160; // arrastre a esta distancia = 100% de potencia
 const POTENCIA_MINIMA_PARA_GOLPEAR = 0.03;
 
 interface Previsualizacion {
-  direccion: THREE.Vector3; // horizontal, normalizada, sin desvío (el desvío es aleatorio y solo se decide al soltar)
+  direccion: THREE.Vector3; // horizontal, normalizada — el golpe sale exactamente en esta dirección, sin desvío
   potencia: number; // 0..1
 }
 
@@ -106,10 +106,8 @@ export function ControlTiro({ palo }: { palo: Palo }) {
       ultimaPrevisualizacion.current = null;
       setPrevisualizacion(null);
       if (actual && actual.potencia > POTENCIA_MINIMA_PARA_GOLPEAR) {
-        const desvioRad = THREE.MathUtils.degToRad(desvioGolpe(palo, actual.potencia));
-        const direccionFinal = actual.direccion.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), desvioRad);
         const rapidez = velocidadMaxima(palo) * actual.potencia;
-        dispara(direccionFinal.multiplyScalar(rapidez));
+        dispara(actual.direccion.clone().multiplyScalar(rapidez));
       }
     }
 

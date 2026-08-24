@@ -10,10 +10,10 @@ import { bolaRef } from "@/lib/refs";
 import { useJuego } from "@/lib/store";
 import type { Palo, PelotaCatalogo } from "@/lib/tipos";
 
-// TODO(Fase 3): el jugador elegirá 3 palos de los 19 del catálogo y 1 pelota
+// TODO(Fase 3): el jugador elegirá 3 palos de los 5 del catálogo y 1 pelota
 // antes de la partida. La Fase 1 fija uno de cada para validar la física.
-const PALO_PRUEBA: Palo = { potencia: 3, precision: 3, guia: 3 };
-const PELOTA_PRUEBA: PelotaCatalogo = CATALOGO_PELOTAS[0]!; // "Estándar"
+const PALO_PRUEBA: Palo = { potencia: 3, guia: 3 };
+const PELOTA_PRUEBA: PelotaCatalogo = CATALOGO_PELOTAS.find((p) => p.nombre === "Estándar")!;
 
 export default function Pagina() {
   const reiniciarEstado = useJuego((s) => s.reiniciar);

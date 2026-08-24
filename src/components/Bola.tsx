@@ -88,7 +88,7 @@ export function Bola({
     // Corriente: aceleración continua mientras la bola esté sobre esas celdas.
     if (celda?.corriente) {
       const direccion = DIRECCION_CORRIENTE[celda.corriente.direccion];
-      const aceleracion = aceleracionCorriente(celda.corriente.fuerza, pelota);
+      const aceleracion = aceleracionCorriente(celda.corriente.fuerza);
       const masa = api.mass();
       api.applyImpulse(
         { x: direccion.x * aceleracion * masa * delta, y: 0, z: direccion.z * aceleracion * masa * delta },

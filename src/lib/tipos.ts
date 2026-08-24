@@ -53,17 +53,29 @@ export interface Circuito {
   hoyoDesempate?: string; // id de un hoyo tipo 'desempate'
 }
 
-/** potencia + precision + guia = 9 siempre. */
+/**
+ * potencia + guia = 6 siempre.
+ *
+ * (Decisión de playtest, 2026-08-24: se elimina "precision" del palo — el
+ * desvío aleatorio del golpe resultaba demasiado impredecible, así que el
+ * golpe ahora sale siempre exactamente hacia donde se apunta, sin importar
+ * la potencia usada. "Guía" pasa a ser puramente visual: línea de ayuda +
+ * rebotes previsualizados, ver fisica.ts `guiaVisual`.)
+ */
 export interface Palo {
   potencia: 1 | 2 | 3 | 4 | 5;
-  precision: 1 | 2 | 3 | 4 | 5;
   guia: 1 | 2 | 3 | 4 | 5;
 }
 
-/** velocidad + precision + bote = 9 siempre. */
+/**
+ * velocidad + bote = 6 siempre.
+ *
+ * (Misma decisión de playtest: se elimina "precision" de la pelota. Ya no
+ * modula la resistencia a la corriente — la corriente arrastra igual a
+ * cualquier pelota, ver fisica.ts `aceleracionCorriente`.)
+ */
 export interface Pelota {
   velocidad: 1 | 2 | 3 | 4 | 5;
-  precision: 1 | 2 | 3 | 4 | 5;
   bote: 1 | 2 | 3 | 4 | 5;
 }
 

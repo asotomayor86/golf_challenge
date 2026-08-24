@@ -34,7 +34,7 @@ src/
   lib/
     tipos.ts        Modelo de datos compartido (Celda, Hoyo, Palo, Pelota…)
     fisica.ts        Fórmulas de física puras y testeables (sin Three/Rapier)
-    catalogo.ts      Catálogo de 19 palos (generado) + 5 pelotas (fijas)
+    catalogo.ts      Catálogo de 5 palos (generado) + 5 pelotas (fijas)
     geometria.ts      Generación procedural de terreno (cubos/rampas/cuñas),
                       fusionada por material — nunca un mesh por bloque
     materiales.ts    Apariencia visual por material
@@ -65,3 +65,13 @@ tests/                 Fórmulas de física y catálogo de palos (Vitest)
 - **Constantes marcadas "TODO: ajustar en playtest"** (gravedad, aceleración
   de la corriente, radio/umbral de embocado) no vienen fijadas por el diseño;
   se sintonizan jugando, no adivinando.
+- **Sin "precisión"** (decisión de playtest, 2026-08-24): el palo ya solo
+  tiene potencia+guía (=6) y la pelota velocidad+bote (=6). El golpe sale
+  siempre exactamente hacia donde se apunta — sin desvío aleatorio — y la
+  corriente arrastra igual a cualquier pelota. "Guía" es puramente visual
+  (línea de ayuda + rebotes previsualizados).
+- **La fricción de rodadura se aplica como `linearDamping`, no solo como
+  `friction` del collider**: una bola que rueda sin deslizar apenas nota la
+  fricción de Coulomb (esa solo actúa cuando hay deslizamiento relativo), así
+  que con solo `friction` "nunca acababa de frenarse del todo" (feedback real
+  de playtest). Ver `amortiguacionRodadura` en `fisica.ts`.

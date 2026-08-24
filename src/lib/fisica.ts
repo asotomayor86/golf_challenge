@@ -18,18 +18,12 @@ export function velocidadMaxima(palo: Palo): number {
 }
 
 /**
- * Desvío angular (grados) de un golpe. Modelo mixto, no de azar puro: la
- * magnitud depende de la potencia realmente empleada (0..1 de la máxima del
- * palo) al cuadrado, así que pegar suave con precisión baja es casi
- * perfecto y el riesgo solo aparece al forzar el palo. El signo (izquierda/
- * derecha) sí es aleatorio.
+ * Decisión de playtest (2026-08-24): se elimina el desvío aleatorio del
+ * golpe (antes ligado a "precision", que ya no existe como estadística). El
+ * golpe sale siempre exactamente hacia donde se apunta, pegues suave o
+ * fuerte — así que ya no hay `desvioGolpe`. "Guía" queda como ayuda
+ * puramente visual (línea + rebotes previsualizados, ver `guiaVisual`).
  */
-export function desvioGolpe(palo: Palo, potenciaUsada: number): number {
-  const usada = Math.min(1, Math.max(0, potenciaUsada));
-  const magnitud = (6 - palo.precision) * 1.2 * usada ** 2;
-  const signo = Math.random() < 0.5 ? -1 : 1;
-  return magnitud * signo;
-}
 
 /** Línea de guía: longitud (unidades) y nº de rebotes que previsualiza. */
 export function guiaVisual(palo: Palo): { longitud: number; rebotes: number } {
@@ -77,11 +71,6 @@ export function amortiguacionRodadura(pelota: Pelota, material: Material): numbe
   return friccionEnMaterial(pelota, material) * ESCALA_AMORTIGUACION_RODADURA;
 }
 
-/** Fracción del arrastre de una corriente que realmente sufre la pelota. */
-export function arrastreReal(arrastreBase: number, pelota: Pelota): number {
-  return arrastreBase * (1 - pelota.precision * 0.12);
-}
-
 /** Restitución (rebote) de la pelota, usada como `restitution` del collider. */
 export function restitucionPelota(pelota: Pelota): number {
   return 0.25 + pelota.bote * 0.11;
@@ -94,13 +83,14 @@ export const ACELERACION_CORRIENTE_POR_FUERZA = 0.9;
 
 /**
  * Aceleración (u/s²) que la corriente aplica a la pelota mientras está sobre
- * esas celdas. Debe ser perceptible pero no dominante: a fuerza 5 con una
- * pelota de precisión media, una bola parada deriva, no sale disparada (muy
- * por debajo de las velocidades de golpe, que arrancan en 12 u/s).
+ * esas celdas. Debe ser perceptible pero no dominante: a fuerza 5 una bola
+ * parada deriva, no sale disparada (muy por debajo de las velocidades de
+ * golpe, que arrancan en 12 u/s). Ya no depende de la pelota — sin
+ * "precision", no queda ninguna estadística de la pelota a la que ligar la
+ * resistencia a la corriente, así que arrastra igual a cualquier pelota.
  */
-export function aceleracionCorriente(fuerza: 1 | 2 | 3 | 4 | 5, pelota: Pelota): number {
-  const base = fuerza * ACELERACION_CORRIENTE_POR_FUERZA;
-  return arrastreReal(base, pelota);
+export function aceleracionCorriente(fuerza: 1 | 2 | 3 | 4 | 5): number {
+  return fuerza * ACELERACION_CORRIENTE_POR_FUERZA;
 }
 
 // --- Embocado ------------------------------------------------------------------
