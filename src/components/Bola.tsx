@@ -6,7 +6,7 @@ import { RigidBody, BallCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { RADIO_BOLA } from "@/lib/tipos";
 import type { Celda, DireccionCorriente, Pelota } from "@/lib/tipos";
-import { restitucionPelota, aceleracionCorriente, embocaria } from "@/lib/fisica";
+import { restitucionPelota, aceleracionCorriente, amortiguacionRodadura, embocaria } from "@/lib/fisica";
 import { useJuego } from "@/lib/store";
 import { bolaRef } from "@/lib/refs";
 
@@ -74,8 +74,18 @@ export function Bola({
       queueMicrotask(() => marcarMovimiento(moviendose));
     }
 
-    // Corriente: aceleración continua mientras la bola esté sobre esas celdas.
     const celda = celdaEn(posicion.x, posicion.z, celdas);
+
+    // Fricción de rodadura: la fricción de Coulomb del collider (Terreno.tsx)
+    // casi no frena una bola que rueda sin deslizar, así que el material se
+    // aplica aquí como `linearDamping` (ver comentario en fisica.ts). Solo
+    // mientras esté cerca del suelo: en pleno vuelo de un golpe no debe
+    // frenarse como si rodara.
+    const alturaSuelo = celda?.altura ?? 0;
+    const cercaDelSuelo = posicion.y < alturaSuelo + RADIO_BOLA + 0.5;
+    api.setLinearDamping(cercaDelSuelo ? amortiguacionRodadura(pelota, celda?.material ?? "cesped") : 0);
+
+    // Corriente: aceleración continua mientras la bola esté sobre esas celdas.
     if (celda?.corriente) {
       const direccion = DIRECCION_CORRIENTE[celda.corriente.direccion];
       const aceleracion = aceleracionCorriente(celda.corriente.fuerza, pelota);

@@ -62,6 +62,38 @@ function caja(
   return tris;
 }
 
+/**
+ * Red de seguridad de orientación: para cada triángulo, si su normal (según
+ * el orden de sus vértices) apunta HACIA el interior del sólido en vez de
+ * alejándose de él, se invierte. Las cuñas/rampas se derivan a mano y un
+ * vértice mal ordenado da una normal invertida — Rapier usa esa normal para
+ * la respuesta de colisión, así que una cara volteada puede lanzar la bola
+ * por los aires en vez de frenarla (bug real que esto corrige).
+ *
+ * El punto "interior" se calcula como la media de TODOS los vértices del
+ * sólido (no un punto fijo como el centro de la celda): en cuñas y rampas
+ * ese centro geométrico cae justo ENCIMA de la cara inclinada, un caso límite
+ * que hacía fallar la comprobación para exactamente las formas que más lo
+ * necesitaban. La media de vértices, al incluir también los de la base y los
+ * laterales, cae de forma fiable dentro del sólido.
+ */
+function orientarHaciaAfuera(triangulos: Triangulo[]): Triangulo[] {
+  const centro = new THREE.Vector3();
+  let n = 0;
+  for (const [a, b, c] of triangulos) {
+    centro.add(a).add(b).add(c);
+    n += 3;
+  }
+  centro.divideScalar(n);
+
+  return triangulos.map(([a, b, c]) => {
+    const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+    const centroide = new THREE.Vector3().add(a).add(b).add(c).divideScalar(3);
+    const haciaFuera = new THREE.Vector3().subVectors(centroide, centro);
+    return normal.dot(haciaFuera) < 0 ? ([a, c, b] as Triangulo) : ([a, b, c] as Triangulo);
+  });
+}
+
 /** Rota (múltiplo de 90°) un punto alrededor del centro de la celda (0.5, *, 0.5), sin trigonometría. */
 function rotarY(p: THREE.Vector3, rot: Rotacion): THREE.Vector3 {
   const dx = p.x - 0.5;
@@ -122,7 +154,7 @@ function bloqueSuperior(
       // Rampa recta: alta en z=0, baja (a ras de la columna de debajo) en z=1.
       const tris: Triangulo[] = [
         ...techoPorEsquinas(yTop, yBase, yBase, yTop), // superficie inclinada
-        ...quad(v(0, yBase, 1), v(0, yTop, 0), v(1, yTop, 0), v(1, yBase, 1)), // cara alta (z=0)
+        ...quad(v(1, yBase, 0), v(0, yBase, 0), v(0, yTop, 0), v(1, yTop, 0)), // cara alta (z=0, rectángulo)
         // laterales triangulares (x=0 y x=1)
         [v(0, yBase, 1), v(0, yBase, 0), v(0, yTop, 0)],
         [v(1, yTop, 0), v(1, yBase, 0), v(1, yBase, 1)],
@@ -164,14 +196,14 @@ function bloqueSuperior(
   }
 }
 
-/** Todos los triángulos (en espacio local, ya rotados) de una celda. */
+/** Todos los triángulos (en espacio local) de una celda, con la normal ya verificada hacia afuera. */
 function triangulosCelda(celda: Celda): Triangulo[] {
   if (celda.altura <= 0) return [];
 
   if (celda.forma === "cubo") {
     // La forma 'cubo' no distingue columna base / bloque superior: es una
     // caja lisa de 0 a `altura`, sin caras internas que evitar.
-    return caja(0, 1, 0, celda.altura, 0, 1);
+    return orientarHaciaAfuera(caja(0, 1, 0, celda.altura, 0, 1));
   }
 
   const yBase = celda.altura - 1;
@@ -184,7 +216,9 @@ function triangulosCelda(celda: Celda): Triangulo[] {
     ([a, b, c]) => [rotarY(a, celda.rotacion), rotarY(b, celda.rotacion), rotarY(c, celda.rotacion)] as Triangulo,
   );
   tris.push(...superior);
-  return tris;
+  // Red de seguridad: cualquier cara mal orientada al derivar rampas/cuñas a
+  // mano se corrige aquí antes de que llegue al collider de Rapier.
+  return orientarHaciaAfuera(tris);
 }
 
 function geometriaDesdeTriangulos(triangulos: Triangulo[]): THREE.BufferGeometry {

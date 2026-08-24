@@ -61,6 +61,22 @@ export function friccionEnMaterial(pelota: Pelota, material: Material): number {
   return friccionBase(pelota) * MULTIPLICADOR_FRICCION_MATERIAL[material];
 }
 
+/**
+ * TODO: ajustar en playtest — escala que convierte friccionEnMaterial (un
+ * coeficiente de Coulomb, pensado para fricción de CONTACTO) en un
+ * `linearDamping` de Rapier. Hace falta porque una bola que rueda SIN
+ * deslizar apenas roza la fricción de Coulomb (esa fricción solo actúa
+ * cuando hay deslizamiento relativo en el punto de contacto) — con solo
+ * `friction` en el collider, la bola "nunca acaba de frenarse del todo"
+ * (feedback real de playtest). El `linearDamping` sí frena rodadura pura.
+ */
+export const ESCALA_AMORTIGUACION_RODADURA = 22;
+
+/** `linearDamping` (Rapier) que aplicar a la bola mientras rueda sobre un material dado. */
+export function amortiguacionRodadura(pelota: Pelota, material: Material): number {
+  return friccionEnMaterial(pelota, material) * ESCALA_AMORTIGUACION_RODADURA;
+}
+
 /** Fracción del arrastre de una corriente que realmente sufre la pelota. */
 export function arrastreReal(arrastreBase: number, pelota: Pelota): number {
   return arrastreBase * (1 - pelota.precision * 0.12);

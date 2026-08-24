@@ -56,11 +56,12 @@ export function EscenaGolf({ hoyo, palo, pelota }: { hoyo: Hoyo; palo: Palo; pel
 
       {/*
         Timestep fijo a 60Hz (§4) y CCD en la bola (Bola.tsx) para que nunca
-        atraviese paredes. Gravedad TODO: ajustar en playtest — con -9.81 m/s²
-        "de verdad" una bola de radio 0.2 en un mundo a escala 1 bloque =
-        1 unidad se siente floja; -18 da botes más secos y golpes más nítidos.
+        atraviese paredes. Gravedad TODO: ajustar en playtest — -9.81 "de
+        verdad" se sentía floja; -18 (primer intento) resultó demasiado
+        "de plástico" / con botes exagerados en el primer playtest real.
+        -13 es el punto intermedio actual, a falta de más partidas.
       */}
-      <Physics timeStep={1 / 60} gravity={[0, -18, 0]}>
+      <Physics timeStep={1 / 60} gravity={[0, -13, 0]}>
         <Terreno celdas={hoyo.celdas} pelota={pelota} />
         <Bola
           celdas={hoyo.celdas}
