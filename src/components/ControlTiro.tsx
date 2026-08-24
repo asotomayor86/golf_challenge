@@ -12,9 +12,51 @@ const RADIO_INICIO_ARRASTRE_PX = 70; // el arrastre debe empezar cerca de la bol
 const ARRASTRE_MAX_PX = 160; // arrastre a esta distancia = 100% de potencia
 const POTENCIA_MINIMA_PARA_GOLPEAR = 0.03;
 
+// Flecha de potencia: 5 niveles de color, siempre en este orden (verde =
+// suave, morado = a tope). Un palo con potencia baja no puede llegar a los
+// colores altos aunque se arrastre a fondo — ver `nivelPotencia`.
+const COLORES_POTENCIA = ["#4caf50", "#ffd54f", "#ff9800", "#e53935", "#9c27b0"];
+const LONGITUD_MAX_FLECHA_POTENCIA = 2.5; // u, a potencia 100% — igual para todos los palos
+
+/** Nivel de color (1..potenciaPalo) que corresponde al tirón actual, tope en la potencia propia del palo. */
+function nivelPotencia(potenciaUsada: number, potenciaPalo: number): number {
+  const nivel = Math.ceil(potenciaUsada * potenciaPalo);
+  return Math.min(potenciaPalo, Math.max(1, nivel));
+}
+
 interface Previsualizacion {
   direccion: THREE.Vector3; // horizontal, normalizada — el golpe sale exactamente en esta dirección, sin desvío
   potencia: number; // 0..1
+}
+
+function Linea({ desde, hasta, color }: { desde: THREE.Vector3; hasta: THREE.Vector3; color: string }) {
+  const puntos = new Float32Array([desde.x, desde.y, desde.z, hasta.x, hasta.y, hasta.z]);
+  return (
+    <line>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[puntos, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial color={color} linewidth={2} />
+    </line>
+  );
+}
+
+/** Línea + punta cónica orientada, para que la potencia se lea como una flecha, no una raya. */
+function FlechaPotencia({ desde, hasta, color }: { desde: THREE.Vector3; hasta: THREE.Vector3; color: string }) {
+  const direccion = new THREE.Vector3().subVectors(hasta, desde);
+  if (direccion.lengthSq() < 0.0001) return null;
+  direccion.normalize();
+  const cuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direccion);
+
+  return (
+    <>
+      <Linea desde={desde} hasta={hasta} color={color} />
+      <mesh position={hasta} quaternion={cuaternion}>
+        <coneGeometry args={[0.06, 0.18, 12]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+    </>
+  );
 }
 
 /**
@@ -22,6 +64,14 @@ interface Previsualizacion {
  * atrás desde la bola marca dirección y potencia, soltar ejecuta el golpe.
  * Si el arrastre no empieza cerca de la bola, se ignora aquí y llega intacto
  * a los OrbitControls de la cámara (arrastrar en cualquier otro punto orbita).
+ *
+ * Mientras se apunta se ven dos cosas distintas:
+ * - La GUÍA (hacia delante, color neutro): longitud fija = guía del palo
+ *   (`guiaVisual`), no cambia con lo que arrastres — es "hasta dónde ayuda
+ *   a apuntar este palo", no la potencia del golpe.
+ * - La FLECHA DE POTENCIA (hacia atrás, coloreada): crece con el arrastre y
+ *   su color marca el nivel (verde→morado) que alcanzaría ESTE palo con esa
+ *   fuerza — un palo de potencia baja no pasa de los colores bajos.
  */
 export function ControlTiro({ palo }: { palo: Palo }) {
   const { camera, gl, size } = useThree();
@@ -126,23 +176,21 @@ export function ControlTiro({ palo }: { palo: Palo }) {
   const api = bolaRef.current;
   if (!previsualizacion || !api) return null;
 
-  // La línea se dibuja hacia ATRÁS (como al tensar un tirachinas): en la
-  // dirección de la que se tira, opuesta a hacia donde saldrá la bola. El
-  // golpe en sí (dispara(), más arriba) sigue usando `direccion` sin invertir.
-  const { longitud } = guiaVisual(palo);
-  const origen = api.translation();
-  const destino = new THREE.Vector3(origen.x, origen.y, origen.z).addScaledVector(
-    previsualizacion.direccion,
-    -(longitud * previsualizacion.potencia),
-  );
-  const puntos = new Float32Array([origen.x, origen.y + 0.05, origen.z, destino.x, destino.y + 0.05, destino.z]);
+  const p = api.translation();
+  const origen = new THREE.Vector3(p.x, p.y + 0.05, p.z);
+
+  const { longitud: longitudGuia } = guiaVisual(palo);
+  const destinoGuia = origen.clone().addScaledVector(previsualizacion.direccion, longitudGuia);
+
+  const destinoFlecha = origen
+    .clone()
+    .addScaledVector(previsualizacion.direccion, -(LONGITUD_MAX_FLECHA_POTENCIA * previsualizacion.potencia));
+  const colorFlecha = COLORES_POTENCIA[nivelPotencia(previsualizacion.potencia, palo.potencia) - 1]!;
 
   return (
-    <line>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[puntos, 3]} />
-      </bufferGeometry>
-      <lineBasicMaterial color="#ffe066" linewidth={2} />
-    </line>
+    <>
+      <Linea desde={origen} hasta={destinoGuia} color="#cfe8ff" />
+      <FlechaPotencia desde={origen} hasta={destinoFlecha} color={colorFlecha} />
+    </>
   );
 }

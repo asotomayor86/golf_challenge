@@ -90,8 +90,10 @@ export interface PelotaCatalogo extends Pelota {
 }
 
 // --- Unidades ---------------------------------------------------------------
-// 1 bloque = 1 unidad de mundo. Radio de la bola = 0,2. Eje Y = altura.
-export const RADIO_BOLA = 0.2;
+// 1 bloque = 1 unidad de mundo. Eje Y = altura.
+// Radio de la bola: el diseño original pedía 0,2; en playtest se veía grande
+// frente al hoyo (radio 0,35, ver RADIO_COPA en fisica.ts) y se bajó a 0,15.
+export const RADIO_BOLA = 0.15;
 export const TAMANO_CELDA_MAX = 32;
 export const ALTURA_MAX_BLOQUES = 8;
 export const LIMITE_BLOQUES_HOYO = 2000;

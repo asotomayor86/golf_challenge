@@ -13,6 +13,16 @@ import { bolaRef } from "@/lib/refs";
 const UMBRAL_DETENIDA = 0.05; // u/s — por debajo se considera "parada" para el HUD
 const Y_CAIDA_LIMITE = -5; // TODO(Fase 3): sustituir por la regla real (agua/fuera de límites ⇒ +1 y vuelve a la última posición seca)
 
+// Animación de embocado: la bola no se limita a pararse encima de la copa
+// (con el radio de copa más grande que la bola no se notaba que "caía"
+// dentro) — se anima cayendo y encogiendo un poco, puramente visual.
+const DURACION_EMBOCADO_S = 0.4;
+const PROFUNDIDAD_EMBOCADO = 0.3;
+
+function suavizado(t: number): number {
+  return t * t * (3 - 2 * t); // smoothstep
+}
+
 // TODO: ajustar en playtest — suaviza el cambio de ángulo al entrar/salir de
 // una rampa. Un collider hecho de caras planas (trimesh) tiene un cambio
 // BRUSCO de normal justo en la costura con la celda plana vecina; el
@@ -51,6 +61,8 @@ export function Bola({
   const ultimoIdProcesado = useRef(0);
   const estabaEnMovimiento = useRef(false);
   const velocidadYAnterior = useRef(0);
+  const mallaRef = useRef<THREE.Mesh>(null);
+  const embocadoAnim = useRef<{ yInicial: number; t: number } | null>(null);
   const solicitudDisparo = useJuego((s) => s.solicitudDisparo);
   const embocada = useJuego((s) => s.embocada);
   const marcarMovimiento = useJuego((s) => s.marcarMovimiento);
@@ -70,7 +82,29 @@ export function Bola({
 
   useFrame((_, delta) => {
     const api = bolaRef.current;
-    if (!api || embocada) return;
+    if (!api) return;
+
+    if (embocada) {
+      if (!embocadoAnim.current) {
+        api.setGravityScale(0, true); // deja de caer "de verdad"; el resto lo anima este bloque
+        embocadoAnim.current = { yInicial: api.translation().y, t: 0 };
+      }
+      embocadoAnim.current.t = Math.min(DURACION_EMBOCADO_S, embocadoAnim.current.t + delta);
+      const progreso = suavizado(embocadoAnim.current.t / DURACION_EMBOCADO_S);
+      const p = api.translation();
+      api.setTranslation({ x: p.x, y: embocadoAnim.current.yInicial - PROFUNDIDAD_EMBOCADO * progreso, z: p.z }, true);
+      api.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      mallaRef.current?.scale.setScalar(1 - 0.6 * progreso);
+      return;
+    }
+
+    if (embocadoAnim.current) {
+      // Se ha reiniciado la partida viniendo de un embocado: deshace lo que
+      // dejó la animación (gravedad, escala) antes de seguir jugando.
+      api.setGravityScale(1, true);
+      mallaRef.current?.scale.setScalar(1);
+      embocadoAnim.current = null;
+    }
 
     const posicion = api.translation();
     const velocidad = api.linvel();
@@ -148,7 +182,7 @@ export function Bola({
       angularDamping={0.4}
     >
       <BallCollider args={[RADIO_BOLA]} />
-      <mesh castShadow>
+      <mesh ref={mallaRef} castShadow>
         <sphereGeometry args={[RADIO_BOLA, 24, 24]} />
         <meshStandardMaterial color="#f5f5f0" roughness={0.4} />
       </mesh>
