@@ -13,6 +13,16 @@ import { bolaRef } from "@/lib/refs";
 const UMBRAL_DETENIDA = 0.05; // u/s — por debajo se considera "parada" para el HUD
 const Y_CAIDA_LIMITE = -5; // TODO(Fase 3): sustituir por la regla real (agua/fuera de límites ⇒ +1 y vuelve a la última posición seca)
 
+// TODO: ajustar en playtest — suaviza el cambio de ángulo al entrar/salir de
+// una rampa. Un collider hecho de caras planas (trimesh) tiene un cambio
+// BRUSCO de normal justo en la costura con la celda plana vecina; el
+// solver de físicas puede resolver eso con un empujón vertical que se ve
+// como "la rampa lanza la bola". Como la bola llega rodando (velocidad
+// vertical ya pequeña) y no cayendo (velocidad vertical muy negativa), se
+// puede distinguir un bache de una caída real y limar solo el bache.
+const LIMITE_VERTICAL_RODANDO = 1.5; // |vy| por debajo de esto se considera "rodando", no "cayendo"
+const LIMITE_SALTO_SUAVE = 2; // tope de vy al detectar un bache mientras se rueda
+
 const DIRECCION_CORRIENTE: Record<DireccionCorriente, THREE.Vector3> = {
   N: new THREE.Vector3(0, 0, -1),
   S: new THREE.Vector3(0, 0, 1),
@@ -40,6 +50,7 @@ export function Bola({
 }) {
   const ultimoIdProcesado = useRef(0);
   const estabaEnMovimiento = useRef(false);
+  const velocidadYAnterior = useRef(0);
   const solicitudDisparo = useJuego((s) => s.solicitudDisparo);
   const embocada = useJuego((s) => s.embocada);
   const marcarMovimiento = useJuego((s) => s.marcarMovimiento);
@@ -84,6 +95,17 @@ export function Bola({
     const alturaSuelo = celda?.altura ?? 0;
     const cercaDelSuelo = posicion.y < alturaSuelo + RADIO_BOLA + 0.5;
     api.setLinearDamping(cercaDelSuelo ? amortiguacionRodadura(pelota, celda?.material ?? "cesped") : 0);
+
+    // Costuras de la rampa: si la bola llegaba RODANDO (vy pequeña) y de
+    // repente vy sube mucho, es un bache del collider, no una caída real
+    // (una caída de verdad llega con vy ya muy negativa) — se recorta.
+    const rodabaSuave = cercaDelSuelo && Math.abs(velocidadYAnterior.current) < LIMITE_VERTICAL_RODANDO;
+    if (rodabaSuave && velocidad.y > LIMITE_SALTO_SUAVE) {
+      api.setLinvel({ x: velocidad.x, y: LIMITE_SALTO_SUAVE, z: velocidad.z }, true);
+      velocidadYAnterior.current = LIMITE_SALTO_SUAVE;
+    } else {
+      velocidadYAnterior.current = velocidad.y;
+    }
 
     // Corriente: aceleración continua mientras la bola esté sobre esas celdas.
     if (celda?.corriente) {

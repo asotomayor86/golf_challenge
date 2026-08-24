@@ -221,13 +221,30 @@ function triangulosCelda(celda: Celda): Triangulo[] {
   return orientarHaciaAfuera(tris);
 }
 
+/** Proyección plana según el eje dominante de la normal (UV "triplanar" barato, sin shader). */
+function proyectarUV(p: THREE.Vector3, normal: THREE.Vector3): [number, number] {
+  const ax = Math.abs(normal.x);
+  const ay = Math.abs(normal.y);
+  const az = Math.abs(normal.z);
+  if (ay >= ax && ay >= az) return [p.x, p.z]; // caras ~horizontales (arriba/abajo)
+  if (ax >= az) return [p.z, p.y]; // caras que miran sobre todo en X
+  return [p.x, p.y]; // caras que miran sobre todo en Z
+}
+
 function geometriaDesdeTriangulos(triangulos: Triangulo[]): THREE.BufferGeometry {
   const geometria = new THREE.BufferGeometry();
   const posiciones = new Float32Array(triangulos.length * 9);
+  const uvs = new Float32Array(triangulos.length * 6);
   triangulos.forEach(([a, b, c], i) => {
     posiciones.set([a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z], i * 9);
+    const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+    const [ua, va] = proyectarUV(a, normal);
+    const [ub, vb] = proyectarUV(b, normal);
+    const [uc, vc] = proyectarUV(c, normal);
+    uvs.set([ua, va, ub, vb, uc, vc], i * 6);
   });
   geometria.setAttribute("position", new THREE.BufferAttribute(posiciones, 3));
+  geometria.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
   geometria.computeVertexNormals(); // no-indexed ⇒ normales planas (look "de bloque")
   return geometria;
 }

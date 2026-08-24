@@ -5,7 +5,8 @@ import { RigidBody, TrimeshCollider } from "@react-three/rapier";
 import { construirGeometriaHoyo, trimeshDesdeGeometria } from "@/lib/geometria";
 import { ESTILO_MATERIAL } from "@/lib/materiales";
 import { friccionEnMaterial } from "@/lib/fisica";
-import type { Celda, Pelota } from "@/lib/tipos";
+import { obtenerTexturaCesped } from "@/lib/texturas";
+import type { Celda, Material, Pelota } from "@/lib/tipos";
 
 /**
  * Terreno de un hoyo: **una geometría fusionada por material** (§9 — nunca un
@@ -14,6 +15,11 @@ import type { Celda, Pelota } from "@/lib/tipos";
  * materiales por hoyo, uno por material es el equivalente práctico que
  * además permite variar la fricción por material sin un solo mesh gigante).
  */
+/** Solo el césped tiene textura propia por ahora; el resto se queda en color liso (§3 no lo pide). */
+function texturaDe(material: Material): ReturnType<typeof obtenerTexturaCesped> {
+  return material === "cesped" ? obtenerTexturaCesped() : undefined;
+}
+
 export function Terreno({ celdas, pelota }: { celdas: Celda[]; pelota: Pelota }) {
   const grupos = useMemo(() => construirGeometriaHoyo(celdas), [celdas]);
 
@@ -27,6 +33,7 @@ export function Terreno({ celdas, pelota }: { celdas: Celda[]; pelota: Pelota })
         // MEDIA por defecto, así que aquí se pone al doble y en la bola a 0:
         // (0 + 2·f) / 2 = f. Evita depender del enum de combine-rule de Rapier.
         const friccionColisionador = friccionEnMaterial(pelota, material) * 2;
+        const textura = texturaDe(material);
         return (
           <RigidBody
             key={material}
@@ -37,7 +44,10 @@ export function Terreno({ celdas, pelota }: { celdas: Celda[]; pelota: Pelota })
           >
             <mesh geometry={geometria} castShadow receiveShadow>
               <meshStandardMaterial
-                color={estilo.color}
+                // Con textura, el color debe quedar en blanco: meshStandardMaterial
+                // multiplica color×map, y estilo.color ya está "dentro" de la textura.
+                color={textura ? "#ffffff" : estilo.color}
+                map={textura}
                 roughness={estilo.rugosidad}
                 metalness={estilo.metalico}
                 transparent={estilo.opacidad !== undefined}

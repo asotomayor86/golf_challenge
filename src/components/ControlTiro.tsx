@@ -126,11 +126,14 @@ export function ControlTiro({ palo }: { palo: Palo }) {
   const api = bolaRef.current;
   if (!previsualizacion || !api) return null;
 
+  // La línea se dibuja hacia ATRÁS (como al tensar un tirachinas): en la
+  // dirección de la que se tira, opuesta a hacia donde saldrá la bola. El
+  // golpe en sí (dispara(), más arriba) sigue usando `direccion` sin invertir.
   const { longitud } = guiaVisual(palo);
   const origen = api.translation();
   const destino = new THREE.Vector3(origen.x, origen.y, origen.z).addScaledVector(
     previsualizacion.direccion,
-    longitud * previsualizacion.potencia,
+    -(longitud * previsualizacion.potencia),
   );
   const puntos = new Float32Array([origen.x, origen.y + 0.05, origen.z, destino.x, destino.y + 0.05, destino.z]);
 
