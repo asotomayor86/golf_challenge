@@ -5,7 +5,7 @@ import {
   friccionBase,
   friccionEnMaterial,
   restitucionPelota,
-  amortiguacionRodadura,
+  desaceleracionRodadura,
   aceleracionCorriente,
   embocaria,
   MULTIPLICADOR_FRICCION_MATERIAL,
@@ -52,9 +52,9 @@ describe("pelota + material", () => {
     expect(restitucionPelota({ velocidad: 3, bote: 5 })).toBeCloseTo(0.8, 10);
   });
 
-  it("amortiguacionRodadura escala friccionEnMaterial (así SÍ frena una bola que rueda sin deslizar)", () => {
-    const arena = amortiguacionRodadura(pelotaEstandar, "arena");
-    const hielo = amortiguacionRodadura(pelotaEstandar, "hielo");
+  it("desaceleracionRodadura escala friccionEnMaterial con una desaceleración constante (no proporcional a la velocidad)", () => {
+    const arena = desaceleracionRodadura(pelotaEstandar, "arena");
+    const hielo = desaceleracionRodadura(pelotaEstandar, "hielo");
     expect(arena).toBeGreaterThan(0);
     expect(arena).toBeGreaterThan(hielo);
   });

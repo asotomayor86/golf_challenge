@@ -61,18 +61,25 @@ export function friccionEnMaterial(pelota: Pelota, material: Material): number {
 
 /**
  * TODO: ajustar en playtest — escala que convierte friccionEnMaterial (un
- * coeficiente de Coulomb, pensado para fricción de CONTACTO) en un
- * `linearDamping` de Rapier. Hace falta porque una bola que rueda SIN
- * deslizar apenas roza la fricción de Coulomb (esa fricción solo actúa
- * cuando hay deslizamiento relativo en el punto de contacto) — con solo
- * `friction` en el collider, la bola "nunca acaba de frenarse del todo"
- * (feedback real de playtest). El `linearDamping` sí frena rodadura pura.
+ * coeficiente de Coulomb) en una desaceleración CONSTANTE (u/s², no
+ * proporcional a la velocidad actual) que se resta a la velocidad de
+ * rodadura cada frame.
+ *
+ * No se usa `linearDamping` de Rapier para esto (que decae de forma
+ * MULTIPLICATIVA, como una exponencial): con una fricción que quita
+ * siempre el mismo % de la velocidad que quede, el frenado se nota fuerte
+ * al principio pero la bola se pasa un buen rato reptando casi parada al
+ * final, sin un punto de frenada claro (feedback real: "debe frenarse más
+ * al final"). Una desaceleración CONSTANTE en cambio pesa cada vez más
+ * según queda menos velocidad (la misma resta absoluta es un porcentaje
+ * mayor de lo que queda) y para del todo en un tiempo finito y predecible
+ * — más fácil de calcular a ojo dónde va a parar la bola.
  */
-export const ESCALA_AMORTIGUACION_RODADURA = 22;
+export const ESCALA_DESACELERACION_RODADURA = 55;
 
-/** `linearDamping` (Rapier) que aplicar a la bola mientras rueda sobre un material dado. */
-export function amortiguacionRodadura(pelota: Pelota, material: Material): number {
-  return friccionEnMaterial(pelota, material) * ESCALA_AMORTIGUACION_RODADURA;
+/** Desaceleración (u/s²) que sufre la bola al rodar sobre un material dado. */
+export function desaceleracionRodadura(pelota: Pelota, material: Material): number {
+  return friccionEnMaterial(pelota, material) * ESCALA_DESACELERACION_RODADURA;
 }
 
 /** Restitución (rebote) de la pelota, usada como `restitution` del collider. */

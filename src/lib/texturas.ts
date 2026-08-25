@@ -60,7 +60,7 @@ export function obtenerTexturaHoyuelosPelota(): THREE.Texture | undefined {
   if (typeof document === "undefined") return undefined;
   if (texturaHoyuelos) return texturaHoyuelos;
 
-  const tam = 256;
+  const tam = 512;
   const lienzo = document.createElement("canvas");
   lienzo.width = tam;
   lienzo.height = tam;
@@ -68,22 +68,25 @@ export function obtenerTexturaHoyuelosPelota(): THREE.Texture | undefined {
   if (!ctx) return undefined;
 
   // Gris neutro = sin relieve en un bumpMap; los hoyuelos se pintan más
-  // oscuros (hundidos) con un degradado radial para que no se vean como
-  // manchas planas.
+  // oscuros (hundidos) con un degradado radial. Antes apenas se notaban
+  // (poco contraste, huecos pequeños y separados) — más densos, más
+  // grandes y con mucho más contraste (casi negro en el centro) para que
+  // se lean claramente como hoyuelos, no como una superficie lisa.
   ctx.fillStyle = "#808080";
   ctx.fillRect(0, 0, tam, tam);
 
-  const columnas = 10;
-  const filas = 10;
+  const columnas = 18;
+  const filas = 18;
   const paso = tam / columnas;
   for (let fila = 0; fila <= filas; fila++) {
     const offsetX = (fila % 2) * (paso / 2); // trama al tresbolillo, como un panal
     for (let col = -1; col <= columnas; col++) {
       const cx = col * paso + offsetX;
       const cy = fila * paso * 0.87;
-      const radio = paso * 0.3;
+      const radio = paso * 0.42;
       const gradiente = ctx.createRadialGradient(cx, cy, 0, cx, cy, radio);
-      gradiente.addColorStop(0, "#3a3a3a");
+      gradiente.addColorStop(0, "#0d0d0d");
+      gradiente.addColorStop(0.7, "#404040");
       gradiente.addColorStop(1, "#808080");
       ctx.fillStyle = gradiente;
       ctx.beginPath();
@@ -95,7 +98,7 @@ export function obtenerTexturaHoyuelosPelota(): THREE.Texture | undefined {
   const textura = new THREE.CanvasTexture(lienzo);
   textura.wrapS = THREE.RepeatWrapping;
   textura.wrapT = THREE.RepeatWrapping;
-  textura.repeat.set(4, 2); // varias vueltas alrededor de la esfera
+  textura.repeat.set(6, 3); // varias vueltas alrededor de la esfera
   textura.needsUpdate = true;
   texturaHoyuelos = textura;
   return textura;

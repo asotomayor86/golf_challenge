@@ -7,7 +7,7 @@ import type { Collider } from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { RADIO_BOLA } from "@/lib/tipos";
 import type { Celda, DireccionCorriente, Pelota } from "@/lib/tipos";
-import { restitucionPelota, aceleracionCorriente, amortiguacionRodadura, embocaria } from "@/lib/fisica";
+import { restitucionPelota, aceleracionCorriente, desaceleracionRodadura, embocaria } from "@/lib/fisica";
 import { obtenerTexturaHoyuelosPelota } from "@/lib/texturas";
 import { useJuego } from "@/lib/store";
 import { bolaRef } from "@/lib/refs";
@@ -28,15 +28,19 @@ function suavizado(t: number): number {
 }
 
 // TODO: ajustar en playtest — quita el rebote mientras la bola está cerca
-// del suelo (rodando), en vez de corregirlo después. Intentos anteriores
-// (recortar la velocidad vertical, incluso teletransportar la posición de
-// vuelta a la altura de reposo) sí evitaban el rebote pero se notaban "a
-// trompicones" — cualquier corrección aplicada de golpe, frame a frame, ES
-// en sí misma un movimiento discontinuo. Poner la restitución del collider
-// a 0 mientras rueda ataja la causa (nada rebota si la colisión es
-// perfectamente inelástica) en vez de corregir el síntoma después, así que
-// el movimiento que sale del propio solver ya es continuo. Con una caída
-// real (al aire, lejos del suelo) se restaura la restitución de la pelota.
+// del suelo (rodando), en vez de corregirlo después. Poner la restitución
+// del collider a 0 mientras rueda ataja la causa (nada rebota si la
+// colisión es perfectamente inelástica). Con una caída real (al aire, lejos
+// del suelo) se restaura la restitución de la pelota.
+//
+// TODO(rampas futuras): con el hoyo de prueba totalmente llano, además se
+// fija la Y de la bola en seco cada frame mientras esté cerca del suelo (ver
+// más abajo) — así el eje vertical no varía NUNCA mientras rueda, cero
+// salto posible por construcción, en vez de ir corrigiendo desviaciones a
+// posteriori (eso se notaba "a trompicones": cualquier corrección aplicada
+// de golpe ES un salto). Con desniveles de verdad habrá que interpolar la
+// altura de reposo en vez de fijarla en seco — pendiente de diseñar cuando
+// vuelva la rampa al hoyo de prueba.
 
 const DIRECCION_CORRIENTE: Record<DireccionCorriente, THREE.Vector3> = {
   N: new THREE.Vector3(0, 0, -1),
@@ -122,23 +126,38 @@ export function Bola({
     }
 
     const celda = celdaEn(posicion.x, posicion.z, celdas);
-
-    // Fricción de rodadura: la fricción de Coulomb del collider (Terreno.tsx)
-    // casi no frena una bola que rueda sin deslizar, así que el material se
-    // aplica aquí como `linearDamping` (ver comentario en fisica.ts). Solo
-    // mientras esté cerca del suelo: en pleno vuelo de un golpe no debe
-    // frenarse como si rodara.
     const alturaSuelo = celda?.altura ?? 0;
     const alturaReposo = alturaSuelo + RADIO_BOLA;
     const cercaDelSuelo = posicion.y < alturaReposo + 0.5;
-    api.setLinearDamping(cercaDelSuelo ? amortiguacionRodadura(pelota, celda?.material ?? "cesped") : 0);
 
-    // Sin rebote mientras rueda (ver comentario arriba de las constantes):
-    // restitución 0 = colisión perfectamente inelástica, así que ningún
-    // contacto (una costura, ruido del solver, el golpe en sí) tiene de
-    // dónde sacar un rebote. Al alejarse del suelo de verdad, se restaura
-    // la restitución real de la pelota para que un golpe fuerte sí bote.
+    // Sin rebote mientras rueda: restitución 0 = colisión perfectamente
+    // inelástica, así que ningún contacto (una costura, ruido del solver, el
+    // golpe en sí) tiene de dónde sacar un rebote. Al alejarse del suelo de
+    // verdad, se restaura la restitución real de la pelota para que un golpe
+    // fuerte sí bote.
     colisionadorRef.current?.setRestitution(cercaDelSuelo ? 0 : restitucionPelota(pelota) * 2);
+
+    if (celda && cercaDelSuelo) {
+      // Frenado final: desaceleración CONSTANTE (fisica.ts), no proporcional
+      // a la velocidad como un `linearDamping` — pesa cada vez más según
+      // queda menos velocidad, para un frenado decidido al final en vez de
+      // reptar (feedback real: "debe frenarse más al final").
+      const velocidadHorizontal = Math.hypot(velocidad.x, velocidad.z);
+      let vx = velocidad.x;
+      let vz = velocidad.z;
+      if (velocidadHorizontal > 0.001) {
+        const desaceleracion = desaceleracionRodadura(pelota, celda.material);
+        const reduccion = Math.min(velocidadHorizontal, desaceleracion * delta);
+        const factor = (velocidadHorizontal - reduccion) / velocidadHorizontal;
+        vx *= factor;
+        vz *= factor;
+      }
+      // Pegada al suelo: en un hoyo llano, fija la Y en seco cada frame (no
+      // solo cuando se desvía) — así el eje vertical no cambia nunca
+      // mientras rueda, cero salto posible por construcción.
+      api.setTranslation({ x: posicion.x, y: alturaReposo, z: posicion.z }, true);
+      api.setLinvel({ x: vx, y: 0, z: vz }, true);
+    }
 
     // Corriente: aceleración continua mientras la bola esté sobre esas celdas.
     if (celda?.corriente) {
@@ -176,19 +195,24 @@ export function Bola({
       type="dynamic"
       colliders={false}
       position={posicionInicial}
-      friction={0} // la fricción real la pone el terreno (ver Terreno.tsx)
       angularDamping={0.4}
     >
-      {/* restitution empieza en 0 (en reposo); useFrame la ajusta cada
+      {/* friction/restitution se declaran aquí, en el collider, no en el
+          RigidBody: con colliders={false} un `friction`/`restitution` puesto
+          en RigidBody no tiene ningún collider auto-generado al que
+          aplicarse. La fricción de rodadura real la pone el frenado
+          explícito en Bola.tsx (desaceleracionRodadura), no este valor —
+          se deja en 0 para no sumar fricción de deslizamiento por encima.
+          restitution empieza en 0 (en reposo); useFrame la ajusta cada
           frame según si está cerca del suelo o no (ver comentario arriba). */}
-      <BallCollider ref={colisionadorRef} args={[RADIO_BOLA]} restitution={0} />
+      <BallCollider ref={colisionadorRef} args={[RADIO_BOLA]} friction={0} restitution={0} />
       <mesh castShadow>
         <sphereGeometry args={[RADIO_BOLA, 32, 32]} />
         <meshStandardMaterial
           color="#f5f5f0"
           roughness={0.4}
           bumpMap={obtenerTexturaHoyuelosPelota()}
-          bumpScale={0.01}
+          bumpScale={0.04}
         />
       </mesh>
     </RigidBody>
